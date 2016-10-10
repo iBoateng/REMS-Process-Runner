@@ -759,6 +759,14 @@ public class Global {
         Global.updateDataNoParams(updtSQL);
     }
 
+    public static void updateRptRnOutptUsd(long rptrnid, String outputUsd) {
+        //String dateStr = Global.getDB_Date_time();
+        String updtSQL = "UPDATE rpt.rpt_report_runs SET "
+                + "output_used = '" + outputUsd.replace("'", "''")
+                + "' WHERE (rpt_run_id = " + String.valueOf(rptrnid) + ")";
+        Global.updateDataNoParams(updtSQL);
+    }
+
     public static int getLovID(String lovName) {
         try {
             String sqlStr = "SELECT value_list_id from gst.gen_stp_lov_names "
@@ -1153,6 +1161,7 @@ public class Global {
     }
 
     public static String[] getMachDetails() {
+        System.setProperty("java.net.preferIPv4Stack", "true");
         String[] nameIP = new String[3];
         nameIP[0] = "";
         nameIP[1] = "";
@@ -1161,24 +1170,24 @@ public class Global {
         String hostname;
         try {
             ip = InetAddress.getLocalHost();
-            Enumeration e = NetworkInterface.getNetworkInterfaces();
+            /*Enumeration e = NetworkInterface.getNetworkInterfaces();
             while (e.hasMoreElements()) {
                 NetworkInterface n = (NetworkInterface) e.nextElement();
+                //
                 if (n.isLoopback() || n.isVirtual() || !n.isUp()) {
 
-                } else {
+                } else if (n.isUp()) {
                     Enumeration ee = n.getInetAddresses();
                     while (ee.hasMoreElements()) {
                         InetAddress i = (InetAddress) ee.nextElement();
                         //System.out.println(i.getHostAddress());
                         //nameIP[2] = i.getHostAddress();
                         ip = i;
-                        break;
+                        //break;
                     }
-                    break;
+                    //break;
                 }
-            }
-            //ip = InetAddress.getLocalHost();
+            }*/
             nameIP[2] = ip.getHostAddress();
             hostname = ip.getHostName();
             nameIP[0] = hostname;
@@ -1196,6 +1205,8 @@ public class Global {
         } catch (SocketException e) {
             return nameIP;
         } catch (UnknownHostException ex) {
+            return nameIP;
+        } catch (Exception ex) {
             return nameIP;
         }
     }
@@ -1747,7 +1758,7 @@ public class Global {
                 if (uploaded) {
                     responsTxt += "File uploaded successfully !";
                 } else {
-                    responsTxt += "Error in uploading file !::"+serverAppDirectory + PureFileName;
+                    responsTxt += "Error in uploading file !::" + serverAppDirectory + PureFileName;
                 }
 
                 Global.updateLogMsg(Global.logMsgID,
@@ -1822,7 +1833,7 @@ public class Global {
                 if (download) {
                     responsTxt += "File downloaded successfully !";
                 } else {
-                    responsTxt += "Error in downloading file !::"+serverAppDirectory + PureFileName;
+                    responsTxt += "Error in downloading file !::" + serverAppDirectory + PureFileName;
                 }
                 Global.updateLogMsg(Global.logMsgID,
                         "\r\n\r\nDownload Response ==>\r\n" + responsTxt,
@@ -4393,6 +4404,7 @@ public class Global {
             ResultSet dtst, String fileNm, String rptTitle, String[] colsToGrp, String[] colsToCnt,
             String[] colsToSum, String[] colsToAvrg, String[] colsToFrmt, boolean isfirst, boolean islast, boolean shdAppnd) {
         try {
+            System.out.println(fileNm);
             DecimalFormat myFormatter = new DecimalFormat("###,##0.00");
             DecimalFormat myFormatter2 = new DecimalFormat("###,##0");
             dtst.last();
@@ -4455,7 +4467,10 @@ public class Global {
             }
 
             Global.strSB.append("</thead><tbody>").append(System.getProperty("line.separator"));
+
             String[][] prevRowVal = new String[totlRows][colCnt];
+            dtst.beforeFirst();
+            System.out.println(Global.strSB.toString());
             for (int a = 0; a < totlRows; a++) {
                 dtst.next();
                 Global.strSB.append("<tr>").append(System.getProperty("line.separator"));
@@ -4464,21 +4479,35 @@ public class Global {
                     double nwval = 0;
                     boolean mstgrp = Global.mustColBeGrpd(String.valueOf(d), colsToGrp);
                     if (Global.mustColBeCntd(String.valueOf(d), colsToCnt) == true) {
-                        if ((a > 0) && (prevRowVal[a - 1][d].equals(dtst.getString(d + 1))) && (mstgrp == true)) {
+                        if ((a > 0) && (mstgrp == true)) {
+                            if ((prevRowVal[a - 1][d].equals(dtst.getString(d + 1)))) {
+
+                            } else {
+                                colcntVals[d] += 1;
+                            }
                         } else {
                             colcntVals[d] += 1;
                         }
                     } else if (Global.mustColBeSumd(String.valueOf(d), colsToSum) == true) {
                         nwval = Double.parseDouble(dtst.getString(d + 1));
-                        if ((a > 0) && (prevRowVal[a - 1][d].equals(dtst.getString(d + 1)))
-                                && (mstgrp == true)) {
+                        if ((a > 0) && (mstgrp == true)) {
+                            if ((prevRowVal[a - 1][d].equals(dtst.getString(d + 1)))) {
+
+                            } else {
+                                colsumVals[d] += nwval;
+                            }
                         } else {
                             colsumVals[d] += nwval;
                         }
                     } else if (Global.mustColBeAvrgd(String.valueOf(d), colsToAvrg) == true) {
                         nwval = Double.parseDouble(dtst.getString(d + 1));
-                        if ((a > 0) && (prevRowVal[a - 1][d].equals(dtst.getString(d + 1)))
-                                && (mstgrp == true)) {
+                        if ((a > 0) && (mstgrp == true)) {
+                            if (prevRowVal[a - 1][d].equals(dtst.getString(d + 1))) {
+
+                            } else {
+                                colcntVals[d] += 1;
+                                colsumVals[d] += nwval;
+                            }
                         } else {
                             colcntVals[d] += 1;
                             colsumVals[d] += nwval;
@@ -4487,10 +4516,27 @@ public class Global {
 
                     int colLen = dtstmd.getColumnName(d + 1).length();
                     if (colLen >= 3) {
-                        if ((a > 0) && (prevRowVal[a - 1][d].equals(dtst.getString(d + 1)))
-                                && (Global.mustColBeGrpd(String.valueOf(d), colsToGrp) == true)) {
-                            wdth = (int) Math.round(((double) colLen / (double) totlLen) * 100);
-                            Global.strSB.append("<td align=\"" + algn + "\"  width=\"" + wdth + "%\">" + " ".replace(" ", "&nbsp;") + "</td>").append(System.getProperty("line.separator"));
+                        if ((a > 0) && (Global.mustColBeGrpd(String.valueOf(d), colsToGrp) == true)) {
+                            if (prevRowVal[a - 1][d].equals(dtst.getString(d + 1))) {
+                                wdth = (int) Math.round(((double) colLen / (double) totlLen) * 100);
+                                Global.strSB.append("<td align=\"" + algn + "\"  width=\"" + wdth + "%\">" + " ".replace(" ", "&nbsp;") + "</td>").append(System.getProperty("line.separator"));
+                            } else {
+                                wdth = (int) Math.round(((double) colLen / (double) totlLen) * 100);
+                                String frsh = " ";
+                                if (Global.mustColBeFrmtd(String.valueOf(d), colsToFrmt) == true) {
+                                    algn = "right";
+                                    double num = Double.parseDouble(dtst.getString(d + 1).trim());
+                                    if (!dtst.getString(d + 1).equals("")) {
+                                        frsh = myFormatter.format(num);//.Trim().PadRight(60, ' ')
+                                    } else {
+                                        frsh = dtst.getString(d + 1) + " ";
+                                    }
+                                } else {
+                                    frsh = dtst.getString(d + 1) + " ";
+                                }
+                                Global.strSB.append("<td align=\"" + algn + "\" width=\"" + wdth + "%\">" + Global.breakTxtDownHTML(frsh,
+                                        dtstmd.getColumnName(d + 1).length()).replace(" ", "&nbsp;") + "</td>").append(System.getProperty("line.separator"));//.replace(" ", "&nbsp;")
+                            }
                         } else {
                             wdth = (int) Math.round(((double) colLen / (double) totlLen) * 100);
                             String frsh = " ";
@@ -4568,6 +4614,9 @@ public class Global {
                 }
             }
         } catch (Exception ex) {
+            System.out.println(ex.getMessage() + "\r\n\r\n" + Arrays.toString(ex.getStackTrace()) + "\r\n\r\n");
+            Global.errorLog += ex.getMessage() + "\r\n\r\n" + Arrays.toString(ex.getStackTrace()) + "\r\n\r\n";
+            Global.writeToLog();
         }
     }
 

@@ -62,37 +62,11 @@ public class Program {
      */
     public static void main(String[] args) {
         try {
-            //TODO code application logic here
-            /*for (int i = 0; i < args.length && i < 20; i++) {
-             System.out.println("Array" + (i + 1) + args[i]);
-             }
-             System.out.println("Hello, World, Array length is " + args.length);
 
-             ResultSet rs = Global.selectDataNoParams("SELECT * FROM org.org_details;");
-             rs.last();
-             int ttlRws = rs.getRow();
-             rs.beforeFirst();
-             ResultSetMetaData dtstmd = rs.getMetaData();
-             int colCnt = dtstmd.getColumnCount();
-             for (int i = 0; i < ttlRws; i++) {
-             rs.next();
-             int id = Integer.parseInt(rs.getString(1));
-             String name = rs.getString(2);
-             String address = rs.getString(4) + " " + rs.getString(5) + rs.getString(6);
-             String cntct = rs.getString(7);
-             System.out.println(" (" + dtstmd.getColumnName(1) + ") = " + id
-             + " (" + dtstmd.getColumnName(2) + ") = " + name
-             + " (" + dtstmd.getColumnName(7) + ") = " + cntct
-             + " (" + dtstmd.getColumnName(4) + ") = " + address);
-             }
-             rs.close();*/
             Global.UsrsOrg_ID = 3;
             Global.dataBasDir = "C:\\1_DESIGNS\\MYAPPS\\Enterprise_Management_System\\Enterprise_Management_System\\bin\\Debug\\Images\\test_database";
             Global.rnnrsBasDir = "C:\\1_DESIGNS\\MYAPPS\\Enterprise_Management_System\\Enterprise_Management_System\\bin\\Debug\\bin";
-            /*Global.runReport("PDF",
-             "C:/Users/richard.adjei-mensah/Desktop/Test1.pdf",
-             "C:/1_DESIGNS/MYAPPS/REMSProcessRunner/reports/jasper2.jrxml",
-             "MY NEW JASPER REPORT");*/
+
             String pname = ManagementFactory.getRuntimeMXBean().getName();
             if (pname.contains("@")) {
                 Global.pid = Integer.parseInt(pname.substring(0, pname.lastIndexOf("@")));
@@ -102,11 +76,15 @@ public class Program {
             Global.HostOSNme = System.getProperty("os.name");
             System.out.println(Global.pid);
             System.out.println(Global.HostOSNme);
-            System.out.println(Arrays.toString(Global.getMachDetails()));
+
+            String[] macDet = Global.getMachDetails();
+            System.out.println(Arrays.toString(macDet));
+            System.out.println(args.length);
+            System.out.println(Arrays.toString(args));
             Global.errorLog += Global.pid + System.getProperty("line.separator")
                     + Global.HostOSNme + System.getProperty("line.separator")
                     + Arrays.toString(Global.getMachDetails()) + System.getProperty("line.separator");
-            Global.writeToLog();
+            //Global.writeToLog();
             if (args.length >= 8) {
                 Global.rnnrsBasDir = StringUtils.strip(args[7], "\"");
                 runnerName = StringUtils.strip(args[5], "\"");
@@ -119,8 +97,6 @@ public class Program {
                     Global.dataBasDir = StringUtils.strip(args[9], "\"");
                     Global.errorLog += args[8] + System.getProperty("line.separator") + args[9] + System.getProperty("line.separator");
                 }
-                
-                String[] macDet = Global.getMachDetails();
                 Global.errorLog += "PID: " + Global.pid + " Running on: " + macDet[0] + " / " + macDet[1] + " / " + macDet[2];
                 Global.writeToLog();
                 Global.runID = Long.valueOf(args[6]);
@@ -140,7 +116,7 @@ public class Program {
                                 Global.getEnbldLovID("Allowed IP Address for Request Listener"));
                         int isDBAllwd = Global.getEnbldPssblValID(Global.Dbase,
                                 Global.getEnbldLovID("Allowed DB Name for Request Listener"));
-                        if (isIPAllwd <= 0 || isDBAllwd <=0) {
+                        if (isIPAllwd <= 0 || isDBAllwd <= 0) {
                             Program.killThreads();
                             Thread.currentThread().interrupt();
                             //Program.killThreads();
@@ -1549,20 +1525,18 @@ public class Program {
                                         funcCurrID, 0,
                                         netAmnt, dateStr, "USR");
                             }
+                        } else if (intrfcTblNm.equals("scm.scm_gl_interface")) {
+                            Global.createScmGLIntFcLn(suspns_accnt,
+                                    "Correction of Imbalance in GL Interface Table as at " + dateStr1,
+                                    0, dateStr1,
+                                    funcCurrID, imbalAmnt.doubleValue(),
+                                    netAmnt, "Imbalance Correction", -1, -1, dateStr, "USR");
                         } else {
-                            if (intrfcTblNm.equals("scm.scm_gl_interface")) {
-                                Global.createScmGLIntFcLn(suspns_accnt,
-                                        "Correction of Imbalance in GL Interface Table as at " + dateStr1,
-                                        0, dateStr1,
-                                        funcCurrID, imbalAmnt.doubleValue(),
-                                        netAmnt, "Imbalance Correction", -1, -1, dateStr, "USR");
-                            } else {
-                                Global.createPayGLIntFcLn(suspns_accnt,
-                                        "Correction of Imbalance in GL Interface Table as at " + dateStr1,
-                                        imbalAmnt.doubleValue(), dateStr1,
-                                        funcCurrID, 0,
-                                        netAmnt, dateStr, "USR");
-                            }
+                            Global.createPayGLIntFcLn(suspns_accnt,
+                                    "Correction of Imbalance in GL Interface Table as at " + dateStr1,
+                                    imbalAmnt.doubleValue(), dateStr1,
+                                    funcCurrID, 0,
+                                    netAmnt, dateStr, "USR");
                         }
                     }
                 }

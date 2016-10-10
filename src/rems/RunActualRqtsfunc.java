@@ -37,7 +37,7 @@ public class RunActualRqtsfunc extends Thread {
             long prgmID = Global.getGnrlRecID("rpt.rpt_prcss_rnnrs", "rnnr_name", "prcss_rnnr_id", Program.runnerName);
             Global.errorLog = "Successfully Started Thread Five\r\nProgram ID:" + prgmID + ": Program Name: " + Program.runnerName + "\r\n";
             String[] macDet = Global.getMachDetails();
-                Global.errorLog += "PID: " + Global.pid + " Running on: " + macDet[0] + " / " + macDet[1] + " / " + macDet[2];
+            Global.errorLog += "PID: " + Global.pid + " Running on: " + macDet[0] + " / " + macDet[1] + " / " + macDet[2];
             Global.writeToLog();
 
             String rptTitle = "";
@@ -175,9 +175,10 @@ public class RunActualRqtsfunc extends Thread {
                         }
                         rptDtSt.beforeFirst();
                     }
-
-                    if (!jsprFileName.equals("")) {
-                        Global.dwnldImgsFTP(15, Global.getRptDrctry() + "/jrxmls", jsprFileName);
+                    if (Global.callngAppType.equals("DESKTOP")) {
+                        if (!jsprFileName.equals("")) {
+                            Global.dwnldImgsFTP(15, Global.getRptDrctry() + "/jrxmls", jsprFileName);
+                        }
                     }
                     String rpt_SQL = "";
                     if (alertID > 0 && msgSentID <= 0) {
@@ -606,6 +607,7 @@ public class RunActualRqtsfunc extends Thread {
                                         + ".txt";
                             }
                         } else {
+                            Global.updateRptRnOutptUsd(rpt_run_id, "HTML");
                             if (rptLyout.equals("None") || rptLyout.equals("TABULAR")) {
                                 Global.exprtToHTMLTblr(dtst,
                                         Global.getRptDrctry() + "/amcharts_2100/samples/" + String.valueOf(rpt_run_id) + ".html",
