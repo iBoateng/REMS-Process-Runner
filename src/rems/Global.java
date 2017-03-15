@@ -2312,10 +2312,12 @@ public class Global {
                 email.attach(attachment);
             }
             int lovID = Global.getLovID("Email Addresses to Ignore");
+            int toMailsAdded = 0;
             for (int i = 0; i < toEmails.length; i++) {
                 if (Global.isEmailValid(toEmails[i], lovID)) {
                     if (Global.getEnbldPssblValID(toEmails[i], lovID) <= 0) {
                         //DO Nothing
+                        toMailsAdded++;
                     } else {
                         toEmails[i] = "ToBeRemoved";
                         errMsgs[0] += "Address:" + toEmails[i] + " blacklisted by you!\r\n";
@@ -2323,6 +2325,9 @@ public class Global {
                 } else {
                     errMsgs[0] += "Address:" + toEmails[i] + " is Invalid!\r\n";
                 }
+            }
+            if (toMailsAdded <= 0) {
+                return false;
             }
             for (int i = 0; i < toEmails.length; i++) {
                 if (toEmails[i].equals("ToBeRemoved")) {
