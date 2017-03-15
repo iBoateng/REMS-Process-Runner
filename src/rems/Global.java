@@ -5,6 +5,26 @@
  */
 package rems;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.activation.DataSource;
+import javax.activation.URLDataSource;
+
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.MimeMessage;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.mail.resolver.DataSourceUrlResolver;
+//import org.apache.commons.mail.settings.EmailConfiguration;
+//import org.junit.Before;
+//import org.junit.Test;
+
 import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.Font;
@@ -24,6 +44,7 @@ import net.sf.jasperreports.engine.export.JRRtfExporter;
 import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
 //import net.sf.jasperreports.view.JasperViewer;
+import java.io.*;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -34,6 +55,7 @@ import java.io.InputStreamReader;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.file.*;
 //import org.apache.commons.io.FileUtils;
 import org.apache.commons.net.ftp.FTPClient;
@@ -44,6 +66,8 @@ import java.net.MalformedURLException;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -79,12 +103,17 @@ import net.sf.jasperreports.export.SimpleWriterExporterOutput;
 import net.sf.jasperreports.export.SimpleXlsReportConfiguration;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.mail.*;
 import org.apache.commons.mail.EmailAttachment;
 import org.apache.commons.mail.EmailException;
+import org.apache.commons.mail.HtmlEmail;
 import org.apache.commons.mail.ImageHtmlEmail;
+import org.apache.commons.mail.SimpleEmail;
 import org.apache.commons.mail.resolver.DataSourceUrlResolver;
 import org.apache.commons.net.ftp.FTP;
+import org.apache.commons.validator.routines.EmailValidator;
 import org.apache.http.Consts;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -176,6 +205,8 @@ public class Global {
             stmt = mycon.createStatement();
             stmt.executeUpdate(delSql);
             mycon.commit();
+            stmt.close();
+            mycon.close();
         } catch (Exception ex) {
             Global.errorLog = delSql + "\r\n" + ex.getMessage();
             Global.writeToLog();
@@ -197,6 +228,8 @@ public class Global {
             stmt = mycon.createStatement();
             stmt.executeUpdate(insSql);
             mycon.commit();
+            stmt.close();
+            mycon.close();
         } catch (Exception ex) {
             Global.errorLog = insSql + "\r\n" + ex.getMessage();
             Global.writeToLog();
@@ -218,6 +251,8 @@ public class Global {
             stmt = mycon.createStatement();
             stmt.executeUpdate(updtSql);
             mycon.commit();
+            stmt.close();
+            mycon.close();
         } catch (Exception ex) {
             Global.errorLog = updtSql + "\r\n" + ex.getMessage();
             Global.writeToLog();
@@ -242,6 +277,8 @@ public class Global {
             Global.updateLogMsg(Global.logMsgID,
                     "\r\n" + stmt.getWarnings().toString() + ": " + mycon.getWarnings().toString() + "\r\n",
                     Global.logTbl, Global.gnrlDateStr, Global.rnUser_ID);
+            stmt.close();
+            mycon.close();
         } catch (Exception ex) {
             Global.errorLog = genSql + "\r\n" + ex.getMessage();
             Global.writeToLog();
@@ -250,12 +287,21 @@ public class Global {
         }
     }
 
+    public static boolean tryParseInt(String value) {
+        try {
+            Integer.parseInt(value);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     public static void writeToLog() {
         try {
             String fileLoc = Global.rnnrsBasDir + "/log_files/";
             SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHH");
             Date d = new Date();
-            fileLoc += "ErrorLog" + String.valueOf(Global.runID).replace("-", "Neg") + "_" + df.format(d) + ".rho";
+            fileLoc += "ErrorLog" + String.valueOf(Global.runID).replace("-", "Neg") + "_" + df.format(d.getTime()) + ".rho";
 
             File file = new File(fileLoc);
 
@@ -892,6 +938,23 @@ public class Global {
         return Global.dataBasDir + "/Rpts";
     }
 
+    public static int getRptID(String rptNm) {
+        int res = -1;
+        try {
+            String strSql = "SELECT report_id "
+                    + "FROM rpt.rpt_reports WHERE report_name = '" + rptNm.replace("'", "''") + "'";
+            ResultSet dtst = Global.selectDataNoParams(strSql);
+            while (dtst.next()) {
+                res = dtst.getInt(1);
+                dtst.close();
+                return res;
+            }
+            return res;
+        } catch (SQLException ex) {
+            return res;
+        }
+    }
+
     private static boolean mustColBeGrpd(String colNo, String[] colsToGrp) {
         for (int i = 0; i < colsToGrp.length; i++) {
             if (colNo.equals(colsToGrp[i])) {
@@ -1122,41 +1185,50 @@ public class Global {
     }
 
     public static String getGnrlRecNm(String tblNm, String srchcol, String rtrnCol, String srchword) {
+        String res = "";
         try {
             String sqlStr = "select " + rtrnCol + " from " + tblNm + " where " + srchcol + " = '" + srchword.replace("'", "''") + "'";
             ResultSet dtst = Global.selectDataNoParams(sqlStr);
             while (dtst.next()) {
-                return dtst.getString(1);
+                res = dtst.getString(1);
+                dtst.close();
+                return res;
             }
-            return "";
+            return res;
         } catch (SQLException ex) {
-            return "";
+            return res;
         }
     }
 
     public static String getDB_Date_time() {
+        String res = "";
         try {
             String sqlStr = "select to_char(now(), 'YYYY-MM-DD HH24:MI:SS')";
             ResultSet dtst = Global.selectDataNoParams(sqlStr);
             while (dtst.next()) {
-                return dtst.getString(1);
+                res = dtst.getString(1);
+                dtst.close();
+                return res;
             }
-            return "";
+            return res;
         } catch (SQLException ex) {
-            return "";
+            return res;
         }
     }
 
     public static String getFrmtdDB_Date_time() {
+        String res = "";
         try {
             String sqlStr = "select to_char(now(), 'DD-Mon-YYYY HH24:MI:SS')";
             ResultSet dtst = Global.selectDataNoParams(sqlStr);
             while (dtst.next()) {
-                return dtst.getString(1);
+                res = dtst.getString(1);
+                dtst.close();
+                return res;
             }
-            return "";
+            return res;
         } catch (SQLException ex) {
-            return "";
+            return res;
         }
     }
 
@@ -1229,6 +1301,7 @@ public class Global {
                     + "<= interval '300 second'";
             ResultSet dtst = Global.selectDataNoParams(selSQL);
             while (dtst.next()) {
+                dtst.close();
                 return true;
             }
             return false;
@@ -1244,6 +1317,7 @@ public class Global {
                     + "' and rnnr_status ilike '%" + macAddrs + "%' and rnnr_status ilike '%" + ipAddrs + "%'";
             ResultSet dtst = Global.selectDataNoParams(selSQL);
             while (dtst.next()) {
+                dtst.close();
                 return true;
             }
             return false;
@@ -1518,6 +1592,7 @@ public class Global {
     }
 
     public static boolean doesLstRnTmExcdIntvl(long rptID, String intrvl, long rn_ID) {
+        boolean res = true;
         try {
             String sqlStr = "select age(now(), to_timestamp(CASE WHEN last_actv_date_tme='' "
                     + "THEN '2013-01-01 00:00:00' ELSE last_actv_date_tme END, 'YYYY-MM-DD HH24:MI:SS'))"
@@ -1527,11 +1602,40 @@ public class Global {
             //and is_this_from_schdler = '1' and is_this_from_schdler='1'
             ResultSet dtst = Global.selectDataNoParams(sqlStr);
             while (dtst.next()) {
-                return dtst.getBoolean(1);
+                res = dtst.getBoolean(1);
+                dtst.close();
+                return res;
             }
-            return true;
+            return res;
         } catch (SQLException ex) {
-            return true;
+            return res;
+        }
+    }
+
+    public static void updateBulkMsgSent(long msgSntID, String dteSent,
+            String sentStatus, String errMsg) {
+        //string runDate = Global.getDB_Date_time();
+        String updateSQL = "UPDATE alrt.bulk_msgs_sent SET "
+                + "date_sent='" + dteSent.replace("'", "''")
+                + "', sending_status='" + sentStatus + "', err_msg='" + errMsg + "' "
+                + "WHERE msg_sent_id = " + msgSntID + "";
+        Global.updateDataNoParams(updateSQL);
+    }
+
+    public static boolean doesDteTmExcdIntvl(String intrvl, String dteTme) {
+        boolean res = true;
+        try {
+            String sqlStr = "select age(now(), to_timestamp('" + dteTme + "', 'YYYY-MM-DD HH24:MI:SS')) "
+                    + ">= interval '" + intrvl + "'";
+            ResultSet dtst = Global.selectDataNoParams(sqlStr);
+            while (dtst.next()) {
+                res = dtst.getBoolean(1);
+                dtst.close();
+                return res;
+            }
+            return res;
+        } catch (SQLException ex) {
+            return res;
         }
     }
 
@@ -2060,6 +2164,88 @@ public class Global {
         }
     }
 
+    public static String removeDplctChars(String s) {
+        s = s + " "; // Adding a space at the end of the word
+        int l = s.length(); // Finding the length of the word
+        String ans = ""; // Variable to store the final result
+        char ch1, ch2;
+
+        for (int i = 0; i < l - 1; i++) {
+            ch1 = s.charAt(i); // Extracting the first character
+            ch2 = s.charAt(i + 1); // Extracting the next character
+
+// Adding the first extracted character to the result if the current and the next characters are different
+            if (ch1 == ch2 && (ch1 == ';' || ch1 == ',')) {
+//Do Nothing
+            } else {
+                ans = ans + ch1;
+            }
+        }
+        return ans;
+    }
+
+    public static String encodeURIComponent(String s) {
+        String result;
+        try {
+            result = URLEncoder.encode(s, "UTF-8")
+                    .replaceAll("\\+", "%20")
+                    .replaceAll("\\%21", "!")
+                    .replaceAll("\\%27", "'")
+                    .replaceAll("\\%28", "(")
+                    .replaceAll("\\%29", ")")
+                    .replaceAll("\\%7E", "~");
+        } catch (UnsupportedEncodingException e) {
+            result = s;
+        }
+        return result;
+    }
+
+    public static boolean CheckForInternetConnection() {
+        try {
+            final URL url = new URL("http://www.google.com");
+            final URLConnection conn = url.openConnection();
+            return true;
+        } catch (IOException ex) {
+            Global.errorLog = "\r\nError Checking for Internet!\r\n" + ex.getMessage();
+            Global.writeToLog();
+            return false;
+        }
+    }
+
+    private static boolean isEmailValid(String email, int lovID) {
+        if (email == null || "".equals(email)) {
+            return false;
+        }
+        email = email.trim();
+        EmailValidator ev = EmailValidator.getInstance();
+        boolean isEmailValid = ev.isValid(email);
+        if (isEmailValid == false) {
+            Global.createSysLovsPssblVals1(email, lovID);
+        }
+        return isEmailValid;
+    }
+
+    public static void createSysLovsPssblVals1(String pssblVals, int lovID) {
+        if (Global.getPssblValID(pssblVals, lovID) <= 0) {
+            Global.createPssblValsForLov1(lovID, pssblVals, pssblVals, "1", "");
+        }
+    }
+
+    public static void createPssblValsForLov1(int lovID, String pssblVal,
+            String pssblValDesc, String isEnbld, String allwd) {
+        String dateStr = Global.getDB_Date_time();
+        String sqlStr = "INSERT INTO gst.gen_stp_lov_values("
+                + "value_list_id, pssbl_value, pssbl_value_desc, "
+                + "created_by, creation_date, last_update_by, "
+                + "last_update_date, is_enabled, allowed_org_ids) "
+                + "VALUES (" + lovID + ", '" + pssblVal.replace("'", "''") + "', '"
+                + pssblValDesc.replace("'", "''")
+                + "', " + Global.rnUser_ID + ", '" + dateStr + "', " + Global.rnUser_ID
+                + ", '" + dateStr + "', '" + isEnbld.replace("'", "''")
+                + "', '" + allwd.replace("'", "''") + "')";
+        Global.insertDataNoParams(sqlStr);
+    }
+
     public static boolean sendEmail(String toEml, String ccEml, String bccEml, String attchmnt, String sbjct, String bdyTxt, String[] errMsgs) {
         try {
             String selSql = "SELECT smtp_client, mail_user_name, mail_password, smtp_port FROM sec.sec_email_servers WHERE (is_default = 't')";
@@ -2069,19 +2255,30 @@ public class Global {
             String smtpClnt = "";
             String fromEmlNm = "";
             String fromPswd = "";
+            errMsgs[0] = "";
             int portNo = 0;
             if (m > 0) {
+                selDtSt.beforeFirst();
+                selDtSt.next();
                 smtpClnt = selDtSt.getString(1);
                 fromEmlNm = selDtSt.getString(2);
                 fromPswd = selDtSt.getString(3);
                 portNo = selDtSt.getInt(4);
             }
+            selDtSt.close();
             String fromPassword = Global.decrypt(fromPswd, Global.AppKey);
             // load your HTML email template
+            if (bdyTxt.contains("<body") == false
+                    || bdyTxt.contains("</body>") == false) {
+                bdyTxt = "<body>" + bdyTxt + "</body>";
+            }
+            if (bdyTxt.contains("<html") == false
+                    || bdyTxt.contains("</html>") == false) {
+                bdyTxt = "<!DOCTYPE html><html lang=\"en\">" + bdyTxt + "</html>";
+            }
             String htmlEmailTemplate = bdyTxt;
             // define you base URL to resolve relative resource locations
             URL url = new URL(Global.AppUrl);
-
             // create the email message
             ImageHtmlEmail email = new ImageHtmlEmail();
             email.setDataSourceResolver(new DataSourceUrlResolver(url));
@@ -2093,31 +2290,94 @@ public class Global {
             email.setStartTLSRequired(true);
 
             String spltChars = "\\s*;\\s*";
-            String[] toEmails = toEml.trim().split(spltChars);
-            String[] ccEmails = ccEml.trim().split(spltChars);
-            String[] bccEmails = bccEml.trim().split(spltChars);
-            String[] attchMnts = attchmnt.trim().split(spltChars);
+            String[] toEmails = removeDplctChars(toEml).trim().split(spltChars);
+            String[] ccEmails = removeDplctChars(ccEml).trim().split(spltChars);
+            String[] bccEmails = removeDplctChars(bccEml).trim().split(spltChars);
+            String[] attchMnts = removeDplctChars(attchmnt).trim().split(spltChars);
             for (int i = 0; i < attchMnts.length; i++) {
+                if (attchMnts[i].equals("")) {
+                    continue;
+                }
                 EmailAttachment attachment = new EmailAttachment();
-                attachment.setPath(attchMnts[i]);
+                if (attchMnts[i].startsWith("http://") || attchMnts[i].startsWith("https://")) {
+                    attachment.setURL(new URL(attchMnts[i].replaceAll(" ", "%20")));
+                    //"http://www.apache.org/images/asf_logo_wide.gif"
+                } else {
+                    attachment.setPath(attchMnts[i].replaceAll(" ", "%20"));
+                }
                 attachment.setDisposition(EmailAttachment.ATTACHMENT);
                 //attachment.setDescription("Picture of John");
                 //attachment.setName("John");
                 // add the attachment
                 email.attach(attachment);
             }
-            // Create the attachment
-
+            int lovID = Global.getLovID("Email Addresses to Ignore");
+            for (int i = 0; i < toEmails.length; i++) {
+                if (Global.isEmailValid(toEmails[i], lovID)) {
+                    if (Global.getEnbldPssblValID(toEmails[i], lovID) <= 0) {
+                        //DO Nothing
+                    } else {
+                        toEmails[i] = "ToBeRemoved";
+                        errMsgs[0] += "Address:" + toEmails[i] + " blacklisted by you!\r\n";
+                    }
+                } else {
+                    errMsgs[0] += "Address:" + toEmails[i] + " is Invalid!\r\n";
+                }
+            }
+            for (int i = 0; i < toEmails.length; i++) {
+                if (toEmails[i].equals("ToBeRemoved")) {
+                    toEmails = (String[]) ArrayUtils.remove(toEmails, i);
+                }
+            }
             if (toEmails.length > 0) {
-                email.addTo(toEmails);
+                if (toEmails[0].equals("") == false) {
+                    email.addTo(toEmails);
+                }
+            }
+            for (int i = 0; i < ccEmails.length; i++) {
+                if (Global.isEmailValid(ccEmails[i], lovID)) {
+                    if (Global.getEnbldPssblValID(ccEmails[i], lovID) <= 0) {
+                        //DO Nothing
+                    } else {
+                        ccEmails[i] = "ToBeRemoved";
+                        errMsgs[0] += "Address:" + ccEmails[i] + " blacklisted by you!\r\n";
+                    }
+                } else {
+                    errMsgs[0] += "Address:" + ccEmails[i] + " is Invalid!\r\n";
+                }
+            }
+            for (int i = 0; i < ccEmails.length; i++) {
+                if (ccEmails[i].equals("ToBeRemoved")) {
+                    ccEmails = (String[]) ArrayUtils.remove(ccEmails, i);
+                }
             }
             if (ccEmails.length > 0) {
-                email.addCc(ccEmails);
+                if (ccEmails[0].equals("") == false) {
+                    email.addCc(ccEmails);
+                }
+            }
+            for (int i = 0; i < bccEmails.length; i++) {
+                if (Global.isEmailValid(bccEmails[i], lovID)) {
+                    if (Global.getEnbldPssblValID(bccEmails[i], lovID) <= 0) {
+                        //DO Nothing
+                    } else {
+                        bccEmails[i] = "ToBeRemoved";
+                        errMsgs[0] += "Address:" + bccEmails[i] + " blacklisted by you!\r\n";
+                    }
+                } else {
+                    errMsgs[0] += "Address:" + bccEmails[i] + " is Invalid!\r\n";
+                }
+            }
+            for (int i = 0; i < bccEmails.length; i++) {
+                if (bccEmails[i].equals("ToBeRemoved")) {
+                    bccEmails = (String[]) ArrayUtils.remove(bccEmails, i);
+                }
             }
             if (bccEmails.length > 0) {
-                email.addBcc(bccEmails);
+                if (bccEmails[0].equals("") == false) {
+                    email.addBcc(bccEmails);
+                }
             }
-
             email.setFrom(fromEmlNm.trim());
             email.setSubject(sbjct);
             // set the html message
@@ -2125,15 +2385,30 @@ public class Global {
             // set the alternative message
             email.setTextMsg("Your email client does not support HTML messages");
             // send the email
-            email.send();
-            return true;
+            if (Global.CheckForInternetConnection()) {
+                email.send();
+                return true;
+            }
+            errMsgs[0] += "No Internet Connection";
+            return false;
         } catch (SQLException ex) {
+            Global.errorLog = "\r\nFailed to send Email!\r\n" + ex.getMessage();
+            Global.writeToLog();
             errMsgs[0] += "Failed to send Email!\r\n" + ex.getMessage();
             return false;
         } catch (MalformedURLException ex) {
+            Global.errorLog = "\r\nFailed to send Email!\r\n" + ex.getMessage();
+            Global.writeToLog();
             errMsgs[0] += "Failed to send Email!\r\n" + ex.getMessage();
             return false;
         } catch (EmailException ex) {
+            Global.errorLog = "\r\nFailed to send Email!\r\n" + ex.getMessage();
+            Global.writeToLog();
+            errMsgs[0] += "Failed to send Email!\r\n" + ex.getMessage();
+            return false;
+        } catch (Exception ex) {
+            Global.errorLog = "\r\nFailed to send Email!\r\n" + ex.getMessage();
+            Global.writeToLog();
             errMsgs[0] += "Failed to send Email!\r\n" + ex.getMessage();
             return false;
         }
@@ -2141,6 +2416,10 @@ public class Global {
 
     public static boolean sendSMS(String msgBody, String rcpntNo, String[] errMsg) {
         try {
+            if (!Global.CheckForInternetConnection()) {
+                errMsg[0] = "No Internet Connection";
+                return false;
+            }
             HttpResponse response = null;
             String responseTxt = "";
             msgBody = msgBody.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("|", "/");
@@ -2218,10 +2497,10 @@ public class Global {
                     //response += System.Text.Encoding.ASCII.GetString(responseBytes);
                 }
                 if (responseTxt.toLowerCase().contains(succsTxt.toLowerCase())) {
-                    errMsg[0] += "SMS Successful";
+                    errMsg[0] = "SMS Successful";
                     return true;
                 }
-                errMsg[0] += response;
+                errMsg[0] = responseTxt;
                 return false;
             }
         } catch (SQLException ex) {
@@ -2266,6 +2545,7 @@ public class Global {
     }
 
     public static boolean isThereANActvActnPrcss(String prcsIDs, String prcsIntrvl) {
+        boolean res = true;
         try {
             String strSql = "SELECT age(now(), to_timestamp(last_active_time,'YYYY-MM-DD HH24:MI:SS')) <= interval '" + prcsIntrvl
                     + "' FROM accb.accb_running_prcses WHERE which_process_is_rnng IN (" + prcsIDs
@@ -2275,9 +2555,11 @@ public class Global {
             //Global.showMsg(strSql, 0);
             ResultSet dtst = Global.selectDataNoParams(strSql);
             while (dtst.next()) {
-                return dtst.getBoolean(1);
+                res = dtst.getBoolean(1);
+                dtst.close();
+                return res;
             }
-            return true;
+            return res;
         } catch (SQLException ex) {
             return false;
         }

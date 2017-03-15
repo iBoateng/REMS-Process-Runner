@@ -175,11 +175,11 @@ public class RunActualRqtsfunc extends Thread {
                         }
                         rptDtSt.beforeFirst();
                     }
-                    if (Global.callngAppType.equals("DESKTOP")) {
+                    /*if (Global.callngAppType.equals("DESKTOP")) {
                         if (!jsprFileName.equals("")) {
                             Global.dwnldImgsFTP(15, Global.getRptDrctry() + "/jrxmls", jsprFileName);
                         }
-                    }
+                    }*/
                     String rpt_SQL = "";
                     if (alertID > 0 && msgSentID <= 0) {
                         rpt_SQL = Global.get_Alert_SQL(alertID);
@@ -231,8 +231,10 @@ public class RunActualRqtsfunc extends Thread {
                             } else if (paramSqlRep.equals("{:intrfc_tbl_name}") && rptType.equals("Journal Import")) {
                                 rqrdParamVal = arry2[i];
                             } else if (paramSqlRep.equals("{:orgID}")) {
-                                if (Integer.parseInt(arry2[i]) > 0) {
-                                    Global.UsrsOrg_ID = Integer.parseInt(arry2[i]);
+                                if (Global.tryParseInt(arry2[i])) {
+                                    if (Integer.parseInt(arry2[i]) > 0) {
+                                        Global.UsrsOrg_ID = Integer.parseInt(arry2[i]);
+                                    }
                                 }
                             } else if (paramSqlRep.equals("{:alert_type}")) {
                                 //alertType = arry2[i];
@@ -342,7 +344,7 @@ public class RunActualRqtsfunc extends Thread {
                                 for (int x = 0; x < ttldtstPrm; x++) {
                                     dtstPrm.next();
                                     prmIDs += dtstPrm.getString(1) + "|";
-                                    prmValsFnd = "";
+                                    prmValsFnd = dtstPrm.getString(4);
                                     for (int r = 0; r < ttlCols; r++) {
                                         if (dtstPrm.getString(3).equals("{:" + dtstmd.getColumnName(r + 1) + "}")) {
                                             prmValsFnd = dtst.getString(r + 1);
@@ -351,14 +353,20 @@ public class RunActualRqtsfunc extends Thread {
                                     }
                                     prmVals += prmValsFnd + "|";
                                 }
-                                rptDtSt.next();
-                                String colsToGrp1 = rptDtSt.getString(8);
-                                String colsToCnt1 = rptDtSt.getString(9);
-                                String colsToSum1 = rptDtSt.getString(10);
-                                String colsToAvrg1 = rptDtSt.getString(11);
-                                String colsToFrmt1 = rptDtSt.getString(12);
-                                String rpTitle = rptDtSt.getString(1);
-
+                                String colsToGrp1 = "";
+                                String colsToCnt1 = "";
+                                String colsToSum1 = "";
+                                String colsToAvrg1 = "";
+                                String colsToFrmt1 = "";
+                                String rpTitle = "";
+                                while (rptDtSt.next()) {
+                                    colsToGrp1 = rptDtSt.getString(8);
+                                    colsToCnt1 = rptDtSt.getString(9);
+                                    colsToSum1 = rptDtSt.getString(10);
+                                    colsToAvrg1 = rptDtSt.getString(11);
+                                    colsToFrmt1 = rptDtSt.getString(12);
+                                    rpTitle = rptDtSt.getString(1);
+                                }
                                 //Report Title
                                 prmVals += rpTitle + "|";
                                 prmIDs += Global.sysParaIDs[0] + "|";
@@ -499,6 +507,79 @@ public class RunActualRqtsfunc extends Thread {
                             Global.updateLogMsg(msg_id,
                                     "\r\n\r\nFailed to send Journals to GL!\r\n" + errmsg, log_tbl, dateStr, Global.rnUser_ID);
                         }
+                    } else if (rpt_id == Global.getRptID("Send Outstanding Bulk Messages")) {
+                        String lastTimeChckd = Global.getDB_Date_time();
+                        int lstChckCnt = 0;
+                        int row_cntr = 0;
+                        errMsg = new String[1];
+                        boolean tmeUp = false;
+                        do {
+                            dateStr = lastTimeChckd;
+                            if (lstChckCnt > 0) {
+                                dtst = Global.selectDataNoParams(rpt_SQL.replace("\r\n", " ").replace("\n", " ").replace("\r", " "));
+                            }
+                            dtst.last();
+                            row_cntr = dtst.getRow();
+                            dtst.beforeFirst();
+                            for (int v = 0; v < row_cntr; v++) {
+                                dtst.next();
+                                String msgTyp = dtst.getString(14);
+                                toMails = dtst.getString(3);
+                                ccMails = dtst.getString(4);
+                                bccMails = dtst.getString(8);
+                                attchMns = dtst.getString(13);
+                                sbjct = dtst.getString(7);
+                                msgBdy = dtst.getString(5);
+                                nwMsgSntID = Long.parseLong(dtst.getString(1));
+                                errMsg = new String[1];
+                                if (msgTyp.equals("Email")) {
+                                    if (Global.sendEmail(StringUtils.strip(toMails.replace(",", ";"), seps1),
+                                            StringUtils.strip(ccMails.replace(",", ";"), seps1),
+                                            StringUtils.strip(bccMails.replace(",", ";"), seps1),
+                                            StringUtils.strip(attchMns.replace(",", ";"), seps1),
+                                            sbjct, msgBdy, errMsg) == false) {
+                                        Global.updateBulkMsgSent(nwMsgSntID, dateStr, "0", Arrays.toString(errMsg));
+                                        Global.updateLogMsg(msg_id,
+                                                "\r\n\r\nMessage to " + (toMails + ";" + ccMails + ";" + bccMails).replace(";", ",") + " Failed!\r\n" + Arrays.toString(errMsg), log_tbl, dateStr, Global.rnUser_ID);
+                                    } else {
+                                        Global.updateBulkMsgSent(nwMsgSntID, dateStr, "1", "");
+                                        Global.updateLogMsg(msg_id,
+                                                "\r\n\r\nMessage to " + (toMails + ";" + ccMails + ";" + bccMails).replace(";", ",") + " Successfully Sent!\r\n", log_tbl, dateStr, Global.rnUser_ID);
+                                    }
+                                } else if (msgTyp.equals("SMS")) {
+                                    if (Global.sendSMS(msgBdy,
+                                            StringUtils.strip((toMails + ";" + ccMails + ";" + bccMails).replace(";", ","), seps),
+                                            errMsg) == false) {
+                                        Global.updateBulkMsgSent(nwMsgSntID, dateStr, "0", Arrays.toString(errMsg));
+                                        Global.updateLogMsg(msg_id,
+                                                "\r\n\r\nMessage to " + (toMails + ";" + ccMails + ";" + bccMails).replace(";", ",") + " Failed!\r\n" + Arrays.toString(errMsg), log_tbl, dateStr, Global.rnUser_ID);
+                                    } else {
+                                        Global.updateBulkMsgSent(nwMsgSntID, dateStr, "1", "");
+                                        Global.updateLogMsg(msg_id,
+                                                "\r\n\r\nMessage to " + (toMails + ";" + ccMails + ";" + bccMails).replace(";", ",") + " Successfully Sent!\r\n", log_tbl, dateStr, Global.rnUser_ID);
+                                    }
+                                } else {
+
+                                }
+
+                                if (v == (row_cntr - 1)) {
+                                    lastTimeChckd = Global.getDB_Date_time();
+                                }
+                                Thread.sleep(500);
+
+                                Global.errorLog = "\r\nMessages to " + (toMails + ";" + ccMails + ";" + bccMails) + " worked on";
+                                Global.writeToLog();
+                            }
+                            dtst.close();
+                            lstChckCnt++;
+                            Thread.sleep(5000);
+                            tmeUp = Global.doesDteTmExcdIntvl("30 second", lastTimeChckd);
+                        } while (tmeUp == false);
+                        Global.updateLogMsg(msg_id,
+                                "\r\n\r\nFinished Sending all Messages!\r\n", log_tbl, dateStr, Global.rnUser_ID);
+                    }
+                    if (rpt_id == Global.getRptID("Send Outstanding Bulk Messages")) {
+                        dtst = Global.selectDataNoParams(rpt_SQL.replace("\r\n", " ").replace("\n", " ").replace("\r", " "));
                     }
                     int totl = 0;
                     ResultSetMetaData dtstmd = null;
@@ -632,7 +713,6 @@ public class RunActualRqtsfunc extends Thread {
                         Global.updateRptRnOutpt(rpt_run_id, rptOutpt);
                         Global.updateLogMsg(msg_id,
                                 "\r\n\r\nSuccessfully Saved Report Output...", log_tbl, dateStr, Global.rnUser_ID);
-
                         if (msgSentID > 0) {
                             Global.updateRptRn(rpt_run_id, "Sending Output...", 81);
                             Global.updateLogMsg(msg_id,

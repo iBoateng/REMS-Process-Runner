@@ -92,10 +92,14 @@ public class Program {
                         + "********************" + System.getProperty("line.separator") + args[4] + System.getProperty("line.separator") + args[5]
                         + System.getProperty("line.separator") + args[6] + System.getProperty("line.separator") + Global.rnnrsBasDir + System.getProperty("line.separator");
 
-                if (args.length == 10) {
+                if (args.length >= 10) {
                     Global.callngAppType = StringUtils.strip(args[8], "\"");
                     Global.dataBasDir = StringUtils.strip(args[9], "\"");
                     Global.errorLog += args[8] + System.getProperty("line.separator") + args[9] + System.getProperty("line.separator");
+                    if (args.length == 11) {
+                        Global.AppUrl = StringUtils.strip(args[10], "\"");
+                        Global.errorLog += args[10] + System.getProperty("line.separator");
+                    }
                 }
                 Global.errorLog += "PID: " + Global.pid + " Running on: " + macDet[0] + " / " + macDet[1] + " / " + macDet[2];
                 Global.writeToLog();
@@ -234,7 +238,7 @@ public class Program {
             String fileLoc = Global.rnnrsBasDir + "/log_files/";
             Date dNow = new Date();
             SimpleDateFormat ft = new SimpleDateFormat("ddMMMyyyyHHmmss");
-            fileLoc += "Global.errorLog" + ft.format(dNow) + ".rho";
+            fileLoc += "Global.errorLog" + ft.format(dNow.getTime()) + ".rho";
             PrintWriter fileWriter;
             try {
                 fileWriter = new PrintWriter(fileLoc, "UTF-8");
@@ -251,7 +255,7 @@ public class Program {
             String fileLoc = Global.rnnrsBasDir + "/log_files/";
             Date dNow = new Date();
             SimpleDateFormat ft = new SimpleDateFormat("ddMMMyyyyHHmmss");
-            fileLoc += "Global.errorLog" + ft.format(dNow) + ".rho";
+            fileLoc += "Global.errorLog" + ft.format(dNow.getTime()) + ".rho";
             PrintWriter fileWriter;
             try {
                 fileWriter = new PrintWriter(fileLoc, "UTF-8");
@@ -278,8 +282,8 @@ public class Program {
             bdte2.setTime(frmtr1.parse(dateStr));
             bdte2.add(Calendar.MINUTE, -1);
             bdte2.add(Calendar.SECOND, -59);
-
-            dateStr = frmtr1.format(bdte2);
+            Global.errorLog += bdte2;
+            dateStr = frmtr1.format(bdte2.getTime());
 
             Global.createSchdldRptRn(
                     runBy, dateStr,
@@ -298,7 +302,7 @@ public class Program {
             }
         } catch (Exception ex) {
             //write to log file
-            Global.errorLog = ex.getMessage() + System.getProperty("line.separator") + Arrays.toString(ex.getStackTrace()) + System.getProperty("line.separator");
+            Global.errorLog += ex.getMessage() + System.getProperty("line.separator") + Arrays.toString(ex.getStackTrace()) + System.getProperty("line.separator");
             Global.writeToLog();
             if (thread6.isAlive()) {
                 thread6.interrupt();
@@ -377,7 +381,6 @@ public class Program {
             rnnrStatusPcnt = Integer.parseInt(Global.getGnrlRecNm("rpt.rpt_report_runs",
                     "trim(to_char(rpt_run_id,'999999999999999999999'))",
                     "run_status_prct", String.valueOf(Global.runID)));
-
         }
         if (shdRnnrStop.equals("1") || shdRnIDStop.equals("1") || Global.mustStop == true) {
             Global.updateRptRn(Global.runID, "Cancelled!", 100);
@@ -807,7 +810,7 @@ public class Program {
                         double netAmnt = (double) Global.dbtOrCrdtAccntMultiplier(suspns_accnt,
                                 incrsDcrs) * imbalAmnt.doubleValue();
 
-                        String dateStr1 = frmtr.format(frmtr1.parse(dteDtSt.getString(1))) + " 00:00:00";
+                        String dateStr1 = frmtr.format(frmtr1.parse(dteDtSt.getString(1)).getTime()) + " 00:00:00";
 
                         if (Global.dbtOrCrdtAccnt(suspns_accnt, incrsDcrs).equals("Debit")) {
                             Global.createTransaction(suspns_accnt,
@@ -1206,7 +1209,7 @@ public class Program {
         try {
             SimpleDateFormat frmtr = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
             SimpleDateFormat frmtr1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()));
+            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()).getTime());
 
             ResultSet dtst = Global.get_All_Chrt_Det(Global.UsrsOrg_ID);
             dtst.last();
@@ -1260,7 +1263,7 @@ public class Program {
         try {
             SimpleDateFormat frmtr = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
             SimpleDateFormat frmtr1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()));
+            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()).getTime());
 
             String[] rslt = Global.getAccntLstDailyBalsInfo(accntID, dateStr);
             double lstNetBals = Double.parseDouble(rslt[2]);
@@ -1306,7 +1309,7 @@ public class Program {
         try {
             SimpleDateFormat frmtr = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss");
             SimpleDateFormat frmtr1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()));
+            String dateStr = frmtr.format(frmtr1.parse(Global.getDB_Date_time()).getTime());
 
             ResultSet dtst = Global.get_Batch_Accnts(btchid);
             dtst.last();
@@ -1501,7 +1504,7 @@ public class Program {
 
                         SimpleDateFormat frmtr = new SimpleDateFormat("dd-MMM-yyyy");
                         SimpleDateFormat frmtr1 = new SimpleDateFormat("yyyy-MM-dd");
-                        String dateStr1 = frmtr.format(frmtr1.parse(dteDtSt.getString(1))) + " 00:00:00";
+                        String dateStr1 = frmtr.format(frmtr1.parse(dteDtSt.getString(1)).getTime()) + " 00:00:00";
 
                         String dateStr = Global.getFrmtdDB_Date_time();
 
